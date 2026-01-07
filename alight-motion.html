@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Alight Motion - MasCarli Store</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="container">
+  <div class="product-grid" id="list"></div>
+</div>
+<script src="app.js"></script></script>
+<script>
+const FILTER_IDS = [2, 116, 117, 118]; // Produk Alight Motion
+
+const productImages = {
+  2: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjQMj9W74XFxiNKorjwMDbJKA-BMODRlPf-D-yrpK8MA&s",
+  116: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjQMj9W74XFxiNKorjwMDbJKA-BMODRlPf-D-yrpK8MA&s",
+  117: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjQMj9W74XFxiNKorjwMDbJKA-BMODRlPf-D-yrpK8MA&s",
+  118: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjQMj9W74XFxiNKorjwMDbJKA-BMODRlPf-D-yrpK8MA&s"
+};
+
+fetch(BASE_URL + '/api/products', {
+  method: 'POST',
+  headers: { 'Content-Type':'application/json' },
+  body: JSON.stringify({})
+})
+.then(r => r.json())
+.then(d => {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+
+  d.products
+    .filter(p => FILTER_IDS.includes(Number(p.id)))
+    .forEach(p => {
+
+      const imgSrc = productImages[p.id] || 'default.png';
+
+      list.innerHTML += `
+        <div class="card" id="card-${p.id}">
+          <img src="${imgSrc}" class="card-img">
+          <h4 class="card-title">${p.name}</h4>
+          <p class="card-price">Rp ${rupiah(p.price)}</p>
+          <p class="card-stock" id="stock-${p.id}">Stok: ...</p>
+          <a href="konfirmasi.html?id=${p.id}" 
+             class="btn-beli" 
+             id="btn-${p.id}">
+             Beli
+          </a>
+        </div>
+      `;
+
+      // 🔥 AMBIL STOK REAL (SATU PER PRODUK)
+      fetch(BASE_URL + '/api/stock', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ product_id: p.id })
+      })
+      .then(r => r.json())
+      .then(s => {
+        const stock = Number(s.stock || 0);
+        const stockEl = document.getElementById(`stock-${p.id}`);
+        const btn = document.getElementById(`btn-${p.id}`);
+
+        stockEl.innerText = `Stok: ${stock}`;
+
+        if(stock < 1){
+          btn.innerText = 'Habis';
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.5';
+        }
+      })
+      .catch(() => {
+        document.getElementById(`stock-${p.id}`).innerText = 'Stok: 0';
+      });
+
+    });
+})
+.catch(err => console.error('Error fetch produk:', err));
+
+function rupiah(x){
+  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g,".");
+}
+</script>
+</body>
+</html>

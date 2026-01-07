@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+<title>Konfirmasi - MasCarli Store</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="theme-color" content="#020617">
+</head>
+<body>
+
+<header>
+  <div class="logo"><i class="fa fa-bolt"></i> MasCarli Store</div>
+  <div class="hamburger" onclick="toggleMenu()"><i class="fa fa-bars"></i></div>
+</header>
+
+<nav id="nav">
+ <a href="index.html"><i class="fa fa-home"></i> Beranda</a>
+ <a href="produk.html"><i class="fa fa-box"></i> Produk</a>
+ <a href="bantuan.html"><i class="fa fa-circle-question"></i> Bantuan</a>
+</nav>
+
+<div class="container">
+  <div class="card">
+    <p>Nama: <b id="namaProduk"></b></p>
+    <p>Harga: <b id="hargaProduk"></b></p>
+  </div>
+
+  <div class="card">
+    <input id="wa" placeholder="Masukkan nomor WhatsApp aktif tanpa + 628xxxx">
+    <input id="voucher" placeholder="Kode voucher (Opsional)">
+    <button onclick="beli()">Beli Sekarang</button>
+  </div>
+
+  <!-- Popup QRIS -->
+  <div id="qrisPopup" class="popup" style="display:none"></div>
+</div>
+
+<footer class="footer">
+  <div class="footer-copy">
+    © 2023–2025 MasCarli Store<br>
+
+    <span class="footer-info">
+      <i class="fas fa-envelope"></i>
+      support@mascarli.biz.id
+      <span class="divider">|</span>
+      <i class="fab fa-whatsapp"></i>
+      +62 831-2564-8754
+    </span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  const product_id = new URLSearchParams(location.search).get('id');
+  let interval;
+
+  const namaProduk = document.getElementById('namaProduk');
+  const hargaProduk = document.getElementById('hargaProduk');
+  const wa = document.getElementById('wa');
+  const voucher = document.getElementById('voucher'); // input voucher
+  const qrisPopup = document.getElementById('qrisPopup');
+
+  let totalPrice = 0;
+
+  // Fetch detail produk untuk tampil di konfirmasi
+  fetch(BASE_URL + '/api/product-detail', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({product_id})
+  })
+  .then(r=>r.json())
+  .then(p=>{
+    totalPrice = Number(p.price) + 0; // markup 5000
+    namaProduk.innerText = p.name;
+    hargaProduk.innerText = 'Rp ' + rupiah(totalPrice);
+  });
+
+  window.beli = function() {
+    if(!wa.value) return alert('Nomor WhatsApp wajib diisi');
+
+    let waNumber = wa.value.trim();
+    waNumber = waNumber.replace(/\D/g, '');
+    if(waNumber.startsWith('0')) waNumber = '62' + waNumber.slice(1);
+    else if(!waNumber.startsWith('62')) waNumber = '62' + waNumber;
+
+    fetch(BASE_URL+'/api/buy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        product_id,
+        whatsapp: waNumber,
+        voucher: voucher.value, // kirim voucher
+        amount: totalPrice
+      })
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.success){
+        alert(d.message || 'Gagal membuat invoice');
+        return;
+      }
+
+      // Simpan transaksi
+      localStorage.setItem('trx', JSON.stringify(d));
+
+      const productName = d.product || d.data?.product || 'Produk';
+      const total = d.total || d.data?.total || totalPrice;
+      const invoice = d.invoice || d.data?.invoice || '';
+
+      // Tampilkan popup QRIS
+      qrisPopup.style.display = 'flex';
+      qrisPopup.style.justifyContent = 'center';
+      qrisPopup.style.alignItems = 'center';
+      qrisPopup.innerHTML = `
+        <div class="popup-box">
+          <h3>${productName}</h3>
+          <p class="total-price">
+            TOTAL HARGA: Rp ${rupiah(total)}
+            ${d.discount ? `(Diskon: Rp ${rupiah(d.discount)})` : ''}
+          </p>
+          <p class="invoice">KODE TRX: <small>${invoice}</small></p>
+          <img src="${d.qr_image}" class="qris-img" alt="QRIS">
+          <button class="batal" onclick="batal()">Batal</button>
+        </div>
+      `;
+
+      // Polling status pembayaran
+      interval = setInterval(()=>cekStatus(invoice), 1000);
+    });
+  }
+
+  function cekStatus(invoice){
+    fetch(BASE_URL+'/api/check-pay',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({invoice})
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.data && d.data.status === 'success'){
+        clearInterval(interval);
+        qrisPopup.style.display='none';
+        qrisPopup.innerHTML='';
+        location.href='sukses.html';
+      }
+    });
+  }
+
+  window.batal = function(){
+    clearInterval(interval);
+    localStorage.removeItem('trx');
+    qrisPopup.style.display='none';
+    qrisPopup.innerHTML='';
+  }
+
+});
+</script>
+
+</body>
+</html>
